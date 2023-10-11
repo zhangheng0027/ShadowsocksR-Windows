@@ -2,6 +2,7 @@ using Shadowsocks.Enums;
 using Shadowsocks.Model.Transfer;
 using System;
 using System.Collections.Generic;
+using System.Reflection.Emit;
 
 namespace Shadowsocks.Model
 {
@@ -22,6 +23,7 @@ namespace Shadowsocks.Model
         {
             public int index;
             public Server server;
+            public double? weight;
             public ServerIndex(int i, Server s)
             {
                 index = i;
@@ -183,6 +185,100 @@ namespace Shadowsocks.Model
             return chance;
         }
 
+
+        public struct AutoSelectStruct
+        {
+            public struct Model
+            {
+                public Model()
+                {
+                    max = 0;
+                    min = long.MaxValue;
+                }
+                public long max;
+                public long min;
+
+                public void SetValue(long v)
+                {
+                    if (v > max)
+                    {
+                        max = v;
+                    }
+
+                    if (v < min)
+                    {
+                        min = v;
+                    }
+                }
+
+
+                // 二值化
+                public double Binarization(long v)
+                {
+                    if (v >= max)
+                    {
+                        return 0.8;
+                    }
+
+                    return min == max ? 0.6 : (v - min) / Math.Max(max - min, v - min);
+                }
+            }
+
+            // 当前速度
+            public Model curDownSpeed;
+            // 最大下载速度
+            public Model maxDownSpeed;
+            // 延迟
+            public Model avgConnectTime;
+            // 连接数
+            public Model connecting;
+
+
+        }
+
+
+        private int AutoSelectS(List<ServerIndex> servers)
+        {
+
+            if (servers.Count == 0)
+            {
+                return -1;
+            }
+
+            if (servers.Count == 1)
+            {
+                return servers[0].index;
+            }
+
+            AutoSelectStruct autoSelectStruct = new();
+
+            servers.ForEach
+                (e =>
+                {
+                    Server s = e.server;
+                    autoSelectStruct.curDownSpeed.SetValue(s.SpeedLog.AvgDownloadBytes);
+                    autoSelectStruct.maxDownSpeed.SetValue(s.SpeedLog.MaxDownSpeed);
+                    autoSelectStruct.avgConnectTime.SetValue(s.SpeedLog.AvgConnectTime);
+                    autoSelectStruct.connecting.SetValue(s.SpeedLog.Connecting);
+                    
+                });
+
+            servers.Sort(delegate (ServerIndex a, ServerIndex b) {
+
+                a.weight ??= a.server.CalcWeight(autoSelectStruct);
+                b.weight ??= b.server.CalcWeight(autoSelectStruct);
+
+                if (a.weight > b.weight)
+                {
+                    return 1;
+                }
+
+                return a.weight < b.weight ? -1 : 0;
+            });
+
+            return servers[0].index;
+        }
+
         protected int SubSelect(IList<Server> configs, int curIndex, BalanceType algorithm, FilterFunc filter, bool forceChange)
         {
             if (randomGennarator == null)
@@ -285,7 +381,34 @@ namespace Shadowsocks.Model
                 var serverListIndex = -1;
                 if (serverList.Count > 0)
                 {
-                    if (algorithm == BalanceType.OneByOne)
+                    if (algorithm == BalanceType.AutoSelect)
+                    {
+                        
+                        List<ServerIndex> fullSserver = new();
+                        List<ServerIndex> noFullServer = new();
+                        foreach (var item in serverList)
+                        {
+                            if (item.server.SpeedLog.AvgDownloadBytes > item.server.SpeedLog.MaxDownSpeed * 0.75)
+                            {
+                                fullSserver.Add(item);
+                            }
+                            else
+                            {
+                                noFullServer.Add(item);
+                            }
+                        }
+                        if (noFullServer.Count > 0)
+                        {
+                            return AutoSelectS(noFullServer);
+                        } 
+                        else
+                        {
+                            return AutoSelectS(fullSserver);
+                        }
+
+
+                    }
+                    else if (algorithm == BalanceType.OneByOne)
                     {
                         var selIndex = -1;
                         for (var i = 0; i < serverList.Count; ++i)

@@ -541,5 +541,48 @@ namespace Shadowsocks.Model
             }
             return false;
         }
+
+        public double CalcWeight(ServerSelectStrategy.AutoSelectStruct autoSelectStruct)
+        // 计算权重
+        {
+            double weight = 0;
+
+            // 当前速度与最高速度比值
+            if (_serverSpeedLog.MaxDownSpeed > 0)
+            {
+                weight += (_serverSpeedLog.AvgDownloadBytes / _serverSpeedLog.MaxDownSpeed) * 10;
+            }
+
+            // 延迟 二值化
+            weight += (autoSelectStruct.avgConnectTime.Binarization(_serverSpeedLog.AvgConnectTime)) * 5;
+
+            // 出错比例
+            if (null != _serverSpeedLog.ErrorPercent)
+            {
+                if (_serverSpeedLog.ErrorPercent.Value > 0.8)
+                {
+                    weight += _serverSpeedLog.ErrorPercent.Value * 8;
+                }
+                else
+                {
+                    weight += _serverSpeedLog.ErrorPercent.Value * 3;
+                }
+            }
+
+            // 连接数
+            weight += autoSelectStruct.connecting.Binarization(_serverSpeedLog.Connecting);
+
+            if (weight == 0)
+            {
+                // 随机 0 到 1
+                weight = new Random().NextDouble();
+                
+            } else
+            {
+                weight += 1;
+            }
+
+            return weight;
+        }
     }
 }

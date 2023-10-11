@@ -232,7 +232,7 @@ namespace Shadowsocks.Model.Transfer
                     return (ConnectError + ErrorTimeoutTimes) * 100.0 / m;
                 }
 
-                return null;
+                return 0;
             }
         }
 

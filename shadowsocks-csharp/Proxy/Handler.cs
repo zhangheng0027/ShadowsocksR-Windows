@@ -876,14 +876,14 @@ namespace Shadowsocks.Proxy
 
                         if (!dnsOk)
                         {
-                            if (server.DnsBuffer.Ip != null)
+                            if (null != server && server.DnsBuffer.Ip != null)
                             {
                                 ipAddress = server.DnsBuffer.Ip;
                             }
                             else
                             {
                                 lastErrCode = 8;
-                                server.SpeedLog.AddTimeoutTimes();
+                                server?.SpeedLog.AddTimeoutTimes();
                                 Close();
                                 return;
                             }
