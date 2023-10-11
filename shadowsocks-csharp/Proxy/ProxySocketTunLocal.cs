@@ -12,7 +12,7 @@ namespace Shadowsocks.Proxy
 
         public override int Send(byte[] buffer, int size, SocketFlags flags)
         {
-            if (local_sendback_protocol != null)
+            if (local_sendback_protocol != null && _socket != null)
             {
                 if (local_sendback_protocol == "http")
                 {

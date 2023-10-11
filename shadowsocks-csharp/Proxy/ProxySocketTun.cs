@@ -101,6 +101,11 @@ namespace Shadowsocks.Proxy
 
         public int SendAll(byte[] buffer, int size, SocketFlags flags)
         {
+            if (null == _socket)
+            {
+                return 0;
+            }
+
             var sendSize = _socket.Send(buffer, size, flags);
             while (sendSize < size)
             {
